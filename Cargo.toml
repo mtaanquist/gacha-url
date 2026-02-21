@@ -16,3 +16,6 @@ toml = "0.8"
 toml_edit = "0.22"
 url = "2"
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

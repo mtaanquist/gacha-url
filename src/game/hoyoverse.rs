@@ -176,6 +176,8 @@ fn is_version_dir(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    // -- strip_params --
+
     #[test]
     fn strip_params_retains_only_specified() {
         let url =
@@ -192,6 +194,26 @@ mod tests {
     }
 
     #[test]
+    fn strip_params_none_retained_produces_no_query() {
+        let url = Url::parse("https://example.com/api?junk=1&other=2").unwrap();
+        let result = strip_params(&url, &["authkey"]);
+        let parsed = Url::parse(&result).unwrap();
+        assert!(parsed.query().is_none());
+    }
+
+    #[test]
+    fn strip_params_retains_empty_value() {
+        let url = Url::parse("https://example.com/api?authkey=&lang=en").unwrap();
+        let result = strip_params(&url, &["authkey"]);
+        let parsed = Url::parse(&result).unwrap();
+        let pairs: Vec<_> = parsed.query_pairs().collect();
+        assert_eq!(pairs.len(), 1);
+        assert!(pairs.iter().any(|(k, v)| k == "authkey" && v == ""));
+    }
+
+    // -- find_urls --
+
+    #[test]
     fn find_urls_extracts_from_binary_blob() {
         let mut data = Vec::new();
         data.extend(b"junk data here");
@@ -206,5 +228,84 @@ mod tests {
         let urls = find_urls(&data, &["getGachaLog"]);
         assert_eq!(urls.len(), 1);
         assert!(urls[0].contains("getGachaLog"));
+    }
+
+    #[test]
+    fn find_urls_empty_data_returns_empty() {
+        assert!(find_urls(&[], &["getGachaLog"]).is_empty());
+    }
+
+    #[test]
+    fn find_urls_no_delimiter_returns_empty() {
+        let data = b"https://example.com/api/getGachaLog?authkey=test\0more junk";
+        assert!(find_urls(data, &["getGachaLog"]).is_empty());
+    }
+
+    #[test]
+    fn find_urls_filters_by_pattern() {
+        let mut data = Vec::new();
+        data.extend(b"1/0/");
+        data.extend(b"https://example.com/getLdGachaLog?authkey=a");
+        data.push(0);
+        data.extend(b"1/0/");
+        data.extend(b"https://example.com/getGachaLog?authkey=b");
+        data.push(0);
+
+        // Only the first pattern matches
+        let urls = find_urls(&data, &["getLdGachaLog"]);
+        assert_eq!(urls.len(), 1);
+        assert!(urls[0].contains("getLdGachaLog"));
+
+        // Both patterns match
+        let urls = find_urls(&data, &["getGachaLog", "getLdGachaLog"]);
+        assert_eq!(urls.len(), 2);
+    }
+
+    #[test]
+    fn find_urls_no_null_terminator_reads_to_end() {
+        let mut data = Vec::new();
+        data.extend(b"1/0/");
+        data.extend(b"https://example.com/getGachaLog?authkey=test");
+        // No trailing null byte
+
+        let urls = find_urls(&data, &["getGachaLog"]);
+        assert_eq!(urls.len(), 1);
+        assert!(urls[0].contains("authkey=test"));
+    }
+
+    #[test]
+    fn find_urls_skips_non_utf8_segment() {
+        let mut data = Vec::new();
+        data.extend(b"1/0/");
+        // "http" prefix followed by invalid UTF-8
+        data.extend(b"http");
+        data.extend(&[0xFF, 0xFE]);
+        data.push(0);
+        data.extend(b"1/0/");
+        data.extend(b"https://example.com/getGachaLog?authkey=good");
+        data.push(0);
+
+        let urls = find_urls(&data, &["getGachaLog"]);
+        assert_eq!(urls.len(), 1);
+        assert!(urls[0].contains("good"));
+    }
+
+    // -- is_version_dir --
+
+    #[test]
+    fn is_version_dir_valid() {
+        assert!(is_version_dir("3.24.0.5"));
+        assert!(is_version_dir("1.0.0.0"));
+        assert!(is_version_dir("10.200.300.400"));
+    }
+
+    #[test]
+    fn is_version_dir_invalid() {
+        assert!(!is_version_dir("latest"));
+        assert!(!is_version_dir("3.24"));
+        assert!(!is_version_dir("3.24.0.abc"));
+        assert!(!is_version_dir("3.24.0.5.1"));
+        assert!(!is_version_dir(""));
+        assert!(!is_version_dir("Cache"));
     }
 }
