@@ -1,0 +1,23 @@
+[hsr]
+name = "Honkai: Star Rail"
+search_dirs = [
+    ".local/share/honkers-railway-launcher",
+    ".local/share/Steam/steamapps/compatdata",
+]
+path_hints = ["Star Rail", "StarRail", "HSR", "honkers-railway"]
+
+[gi]
+name = "Genshin Impact"
+search_dirs = [
+    ".local/share/anime-game-launcher",
+    ".local/share/Steam/steamapps/compatdata",
+]
+path_hints = ["Genshin Impact", "GenshinImpact", "genshin"]
+
+[wuwa]
+name = "Wuthering Waves"
+search_dirs = [
+    ".local/share/Steam/steamapps/common/Wuthering Waves",
+    ".steam/steam/steamapps/common/Wuthering Waves",
+]
+path_hints = ["Wuthering Waves", "WutheringWaves", "wuwa"]
