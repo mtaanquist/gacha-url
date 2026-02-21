@@ -14,10 +14,9 @@ pub struct Cli {
     #[arg(short, long)]
     pub game: GameArg,
 
-    /// Optional path to the game install directory. If omitted, the tool will
-    /// search game-specific directories automatically.
+    /// Add a search path to the config for this game, then exit.
     #[arg(short, long)]
-    pub path: Option<PathBuf>,
+    pub add_path: Option<PathBuf>,
 }
 
 #[derive(ValueEnum, Clone, Copy)]

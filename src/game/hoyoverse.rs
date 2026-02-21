@@ -26,12 +26,14 @@ pub fn extract_from_cache(
         bail!("no gacha URLs found in {}", cache_path.display());
     }
 
+    let client = reqwest::blocking::Client::new();
+
     for raw in candidates.iter().rev() {
         let Ok(parsed) = Url::parse(raw) else {
             continue;
         };
 
-        if validate(&parsed)? {
+        if validate(&client, &parsed)? {
             return Ok(strip_params(&parsed, retained_params));
         }
     }
@@ -43,8 +45,6 @@ pub fn extract_from_cache(
     )
 }
 
-/// Walk down from `game_dir` to find the `data_2` file under the
-/// highest-versioned `webCaches` subdirectory.
 fn find_data_2(game_dir: &Path) -> Result<std::path::PathBuf> {
     let web_caches = find_web_caches_dir(game_dir).with_context(|| {
         format!(
@@ -108,8 +108,6 @@ fn find_web_caches_dir(base: &Path) -> Option<std::path::PathBuf> {
     None
 }
 
-/// Scan raw bytes for URLs containing any of the given patterns.
-///
 /// The cache is a binary file with null-delimited strings preceded by `1/0/`.
 fn find_urls(data: &[u8], patterns: &[&str]) -> Vec<String> {
     let delimiter = b"1/0/";
@@ -140,9 +138,8 @@ fn find_urls(data: &[u8], patterns: &[&str]) -> Vec<String> {
     urls
 }
 
-/// Hit the URL and check for `"retcode": 0` in the JSON response.
-fn validate(url: &Url) -> Result<bool> {
-    let resp: serde_json::Value = reqwest::blocking::Client::new()
+fn validate(client: &reqwest::blocking::Client, url: &Url) -> Result<bool> {
+    let resp: serde_json::Value = client
         .get(url.as_str())
         .header("Content-Type", "application/json")
         .send()
@@ -153,7 +150,6 @@ fn validate(url: &Url) -> Result<bool> {
     Ok(resp.get("retcode").and_then(|v| v.as_i64()) == Some(0))
 }
 
-/// Rebuild the URL keeping only the specified query parameters.
 fn strip_params(url: &Url, retain: &[&str]) -> String {
     let filtered: Vec<(String, String)> = url
         .query_pairs()

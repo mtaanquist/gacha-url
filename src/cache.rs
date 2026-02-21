@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use walkdir::WalkDir;
@@ -45,10 +45,17 @@ pub fn auto_detect(
     }
 
     if candidates.is_empty() {
+        let searched: Vec<String> = search_dirs
+            .iter()
+            .map(|d| format!("  {}", d.display()))
+            .collect();
         bail!(
-            "could not find any directories matching {} hints. \
-             Try passing the game path manually with --path.",
-            game_config.name
+            "could not find any directories matching {} hints.\n\
+             Searched in:\n{}\n\
+             To add a search path, run: gacha-url -g {} -a <path>",
+            game_config.name,
+            searched.join("\n"),
+            game.id()
         );
     }
 
@@ -63,13 +70,11 @@ pub fn auto_detect(
 
     Err(last_err.unwrap_or_else(|| {
         anyhow::anyhow!(
-            "checked {} candidate directories for {} but extraction failed in all of them.",
+            "checked {} candidate directories for {} but extraction failed in all of them.\n\
+             To add a search path, run: gacha-url -g {} -a <path>",
             candidates.len(),
-            game_config.name
+            game_config.name,
+            game.id()
         )
     }))
-}
-
-pub fn from_path(game: &dyn GachaGame, path: &Path) -> Result<String> {
-    game.extract_url(path)
 }
