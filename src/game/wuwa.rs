@@ -62,3 +62,97 @@ fn extract_from_logs(game_dir: &Path) -> Result<String> {
         game_dir.display()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    const NON_OVERSEA_URL: &str = "https://aki-gm-resources.aki-game.net/aki/gacha/index.html#/record?svr_id=76402e5b20be2c39f095a152090afddc&player_id=123&lang=en&gacha_id=1&gacha_type=1&svr_api=https://gmserver-api.aki-game2.net&authkey=AAAA&version=2";
+    const OVERSEA_URL: &str = "https://aki-gm-resources-oversea.aki-game.com/aki/gacha/index.html#/record?svr_id=76402e5b20be2c39f095a152090afddc&player_id=456&lang=en";
+
+    // -- URL_PATTERN --
+
+    #[test]
+    fn url_pattern_matches_non_oversea() {
+        assert!(URL_PATTERN.is_match(NON_OVERSEA_URL));
+    }
+
+    #[test]
+    fn url_pattern_matches_oversea() {
+        assert!(URL_PATTERN.is_match(OVERSEA_URL));
+    }
+
+    #[test]
+    fn url_pattern_does_not_match_unrelated_url() {
+        assert!(!URL_PATTERN.is_match("https://example.com/aki/gacha/index.html#/record"));
+        assert!(!URL_PATTERN.is_match("https://aki-gm-resources.aki-game.net/other/path"));
+    }
+
+    // -- extract_from_logs --
+
+    fn write_log(dir: &std::path::Path, rel: &str, contents: &str) {
+        let path = dir.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn extract_from_logs_finds_url_in_client_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_log(
+            tmp.path(),
+            "Client/Saved/Logs/Client.log",
+            &format!("some log line\n{NON_OVERSEA_URL}\nmore log"),
+        );
+
+        let result = extract_from_logs(tmp.path()).unwrap();
+        assert_eq!(result, NON_OVERSEA_URL);
+    }
+
+    #[test]
+    fn extract_from_logs_returns_last_url() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_log(
+            tmp.path(),
+            "Client/Saved/Logs/Client.log",
+            &format!("{NON_OVERSEA_URL}\nsome middle line\n{OVERSEA_URL}\nend"),
+        );
+
+        let result = extract_from_logs(tmp.path()).unwrap();
+        assert_eq!(result, OVERSEA_URL);
+    }
+
+    #[test]
+    fn extract_from_logs_errors_when_no_url_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_log(
+            tmp.path(),
+            "Client/Saved/Logs/Client.log",
+            "nothing useful here",
+        );
+
+        assert!(extract_from_logs(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn extract_from_logs_errors_when_no_log_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(extract_from_logs(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn extract_from_logs_searches_nested_subdirectory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("Wuthering Waves Game");
+        write_log(
+            &nested,
+            "Client/Saved/Logs/Client.log",
+            &format!("log entry: {NON_OVERSEA_URL}"),
+        );
+
+        let result = extract_from_logs(tmp.path()).unwrap();
+        assert_eq!(result, NON_OVERSEA_URL);
+    }
+}

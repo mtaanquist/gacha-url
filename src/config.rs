@@ -85,6 +85,101 @@ pub fn config_path() -> PathBuf {
         .join("gacha-url/config.toml")
 }
 
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    use super::*;
+
+    fn make_game_config(hints: &[&str]) -> GameConfig {
+        GameConfig {
+            name: "Test Game".to_owned(),
+            search_dirs: vec![],
+            path_hints: hints.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // -- GameConfig::matches_path --
+
+    #[test]
+    fn matches_path_returns_true_when_hint_present() {
+        let gc = make_game_config(&["Star Rail"]);
+        assert!(gc.matches_path(Path::new("/home/user/.local/Star Rail/game")));
+    }
+
+    #[test]
+    fn matches_path_is_case_insensitive() {
+        let gc = make_game_config(&["Star Rail"]);
+        assert!(gc.matches_path(Path::new("/home/user/STAR RAIL/game")));
+        assert!(gc.matches_path(Path::new("/home/user/star rail/game")));
+    }
+
+    #[test]
+    fn matches_path_returns_false_when_no_hint_matches() {
+        let gc = make_game_config(&["Star Rail", "StarRail"]);
+        assert!(!gc.matches_path(Path::new("/home/user/genshin/game")));
+    }
+
+    #[test]
+    fn matches_path_returns_false_when_no_hints() {
+        let gc = make_game_config(&[]);
+        assert!(!gc.matches_path(Path::new("/home/user/Star Rail/game")));
+    }
+
+    // -- Config::search_dirs_for --
+
+    fn make_config(search_dirs: Vec<String>) -> Config {
+        let mut games = HashMap::new();
+        games.insert(
+            "test".to_owned(),
+            GameConfig {
+                name: "Test".to_owned(),
+                search_dirs,
+                path_hints: vec![],
+            },
+        );
+        Config { games }
+    }
+
+    #[test]
+    fn search_dirs_for_resolves_relative_paths_against_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let sub = home.join("games/mygame");
+        std::fs::create_dir_all(&sub).unwrap();
+
+        let config = make_config(vec!["games/mygame".to_owned()]);
+        let dirs = config.search_dirs_for("test", home).unwrap();
+
+        assert_eq!(dirs, vec![sub]);
+    }
+
+    #[test]
+    fn search_dirs_for_keeps_absolute_paths_as_is() {
+        let tmp = tempfile::tempdir().unwrap();
+        let abs = tmp.path().to_owned();
+
+        let config = make_config(vec![abs.to_string_lossy().to_string()]);
+        let dirs = config.search_dirs_for("test", Path::new("/irrelevant")).unwrap();
+
+        assert_eq!(dirs, vec![abs]);
+    }
+
+    #[test]
+    fn search_dirs_for_filters_nonexistent_directories() {
+        let config = make_config(vec![
+            "/this/path/does/not/exist".to_owned(),
+            "also/does/not/exist".to_owned(),
+        ]);
+        let dirs = config
+            .search_dirs_for("test", Path::new("/home/user"))
+            .unwrap();
+
+        assert!(dirs.is_empty());
+    }
+}
+
 pub fn add_search_dir(game_id: &str, path: &str) -> Result<()> {
     let config_path = config_path();
 
