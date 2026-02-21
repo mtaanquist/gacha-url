@@ -1,40 +1,37 @@
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use anyhow::{bail, Result};
 use regex::Regex;
 
 use super::GachaGame;
 
+static URL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"https://aki-gm-resources(?:-oversea)?\.aki-game\.(?:net|com)/aki/gacha/index\.html#/record[^\s"]*"#,
+    )
+    .expect("hardcoded regex must be valid")
+});
+
 pub struct WutheringWaves;
 
-/// Relative paths from the game root to the log files that may contain the
-/// convene history URL, in order of preference.
 const LOG_PATHS: &[&str] = &[
     "Client/Saved/Logs/Client.log",
     "Client/Binaries/Win64/ThirdParty/KrPcSdk_Global/KRSDKRes/KRSDKWebView/debug.log",
 ];
 
 impl GachaGame for WutheringWaves {
-    fn name(&self) -> &'static str {
-        "Wuthering Waves"
-    }
-
     fn id(&self) -> &'static str {
         "wuwa"
     }
 
-fn extract_url(&self, game_dir: &Path) -> Result<String> {
+    fn extract_url(&self, game_dir: &Path) -> Result<String> {
         extract_from_logs(game_dir)
     }
 }
 
-/// Search the known log files for a convene history URL.
 fn extract_from_logs(game_dir: &Path) -> Result<String> {
-    let pattern = Regex::new(
-        r#"https://aki-gm-resources(?:-oversea)?\.aki-game\.(?:net|com)/aki/gacha/index\.html#/record[^\s"]*"#,
-    )?;
-
     // Also try the "Wuthering Waves Game" subdirectory, as some installs
     // nest the actual game data one level deeper.
     let nested = game_dir.join("Wuthering Waves Game");
@@ -53,7 +50,7 @@ fn extract_from_logs(game_dir: &Path) -> Result<String> {
             };
 
             // Take the last match -- most recent URL.
-            if let Some(m) = pattern.find_iter(&contents).last() {
+            if let Some(m) = URL_PATTERN.find_iter(&contents).last() {
                 return Ok(m.as_str().to_owned());
             }
         }

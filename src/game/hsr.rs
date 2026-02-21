@@ -11,15 +11,11 @@ const URL_PATTERNS: &[&str] = &["getGachaLog", "getLdGachaLog"];
 const RETAINED_PARAMS: &[&str] = &["authkey", "authkey_ver", "sign_type", "game_biz", "lang"];
 
 impl GachaGame for HonkaiStarRail {
-    fn name(&self) -> &'static str {
-        "Honkai: Star Rail"
-    }
-
     fn id(&self) -> &'static str {
         "hsr"
     }
 
-fn extract_url(&self, game_dir: &Path) -> Result<String> {
+    fn extract_url(&self, game_dir: &Path) -> Result<String> {
         hoyoverse::extract_from_cache(game_dir, URL_PATTERNS, RETAINED_PARAMS)
     }
 }
