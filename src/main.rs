@@ -2,6 +2,7 @@ mod cache;
 mod cli;
 mod config;
 mod game;
+pub(crate) mod steam;
 
 use std::path::PathBuf;
 
@@ -18,19 +19,20 @@ fn main() -> Result<()> {
 
     if let Some(ref new_path) = args.add_path {
         let path_str = new_path.to_string_lossy();
-        config::add_search_dir(game.id(), &path_str)?;
+        config.add_search_dir(game.id(), &path_str)?;
         eprintln!(
             "Added '{}' to search_dirs for {} in {}",
             path_str,
-            game_config.name,
+            game_config.name(),
             config::config_path().display()
         );
         return Ok(());
     }
 
-    eprintln!("Searching for {} ...", game_config.name);
+    eprintln!("Searching for {} ...", game_config.name());
 
-    let dirs = config.search_dirs_for(game.id(), &home)?;
+    let extra = game.extra_search_dirs();
+    let dirs = config.search_dirs_for(game.id(), &home, &extra)?;
     let url = cache::auto_detect(game.as_ref(), game_config, &dirs)?;
 
     println!("{url}");

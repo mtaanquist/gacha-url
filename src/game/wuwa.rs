@@ -29,9 +29,94 @@ impl GachaGame for WutheringWaves {
     fn extract_url(&self, game_dir: &Path) -> Result<String> {
         extract_from_logs(game_dir)
     }
+
+    fn extra_search_dirs(&self) -> Vec<String> {
+        let mut dirs = Vec::new();
+
+        if cfg!(target_os = "linux") {
+            dirs.extend([
+                // Flatpak Steam
+                ".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/Wuthering Waves".into(),
+                ".var/app/com.valvesoftware.Steam/.steam/steam/steamapps/common/Wuthering Waves".into(),
+                ".var/app/com.valvesoftware.Steam/data/Steam/steamapps/common/Wuthering Waves".into(),
+                "/usr/local/games/steam/steamapps/common/Wuthering Waves".into(),
+                // Wine
+                ".wine/drive_c/Program Files/Wuthering Waves".into(),
+                ".wine/drive_c/Program Files/Epic Games/WutheringWavesj3oFh".into(),
+                // Lutris (hint matching will filter to wuwa-related dirs)
+                "Games".into(),
+            ]);
+        }
+
+        if cfg!(target_os = "windows") {
+            dirs.extend([
+                r"C:\Program Files (x86)\Steam\steamapps\common\Wuthering Waves".into(),
+                r"C:\Program Files\Epic Games\WutheringWavesj3oFh".into(),
+                r"C:\Wuthering Waves".into(),
+                r"C:\Wuthering Waves\Wuthering Waves Game".into(),
+                r"D:\SteamLibrary\steamapps\common\Wuthering Waves".into(),
+                r"D:\Wuthering Waves".into(),
+                r"D:\Wuthering Waves\Wuthering Waves Game".into(),
+            ]);
+        }
+
+        // Steam library folders discovered at runtime
+        for lib in crate::steam::discover_library_folders() {
+            let common = lib.join("steamapps/common/Wuthering Waves");
+            dirs.push(common.to_string_lossy().into_owned());
+        }
+
+        dirs
+    }
+}
+
+const ENGINE_INI_PATH: &str = "Client/Saved/Config/WindowsNoEditor/Engine.ini";
+
+fn check_logging_enabled(game_dir: &Path) -> Result<()> {
+    let roots = [
+        game_dir.to_owned(),
+        game_dir.join("Wuthering Waves Game"),
+    ];
+
+    for root in &roots {
+        let ini_path = root.join(ENGINE_INI_PATH);
+        let contents = match fs::read_to_string(&ini_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let mut in_core_log = false;
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_core_log = trimmed.eq_ignore_ascii_case("[core.log]");
+                continue;
+            }
+            if in_core_log {
+                if let Some((key, value)) = trimmed.split_once('=') {
+                    if key.trim().eq_ignore_ascii_case("global") {
+                        let val = value.trim().to_ascii_lowercase();
+                        if val == "off" || val == "none" {
+                            bail!(
+                                "Wuthering Waves logging is disabled in {}. \
+                                 Remove or change the 'Global={}' line under [Core.Log] \
+                                 to enable URL extraction.",
+                                ini_path.display(),
+                                value.trim()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn extract_from_logs(game_dir: &Path) -> Result<String> {
+    check_logging_enabled(game_dir)?;
+
     // Also try the "Wuthering Waves Game" subdirectory, as some installs
     // nest the actual game data one level deeper.
     let nested = game_dir.join("Wuthering Waves Game");
@@ -140,6 +225,46 @@ mod tests {
     fn extract_from_logs_errors_when_no_log_files() {
         let tmp = tempfile::tempdir().unwrap();
         assert!(extract_from_logs(tmp.path()).is_err());
+    }
+
+    // -- check_logging_enabled --
+
+    fn write_engine_ini(dir: &std::path::Path, contents: &str) {
+        write_log(dir, ENGINE_INI_PATH, contents);
+    }
+
+    #[test]
+    fn check_logging_enabled_errors_when_global_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_engine_ini(tmp.path(), "[Core.Log]\nGlobal=off\n");
+        assert!(check_logging_enabled(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn check_logging_enabled_errors_when_global_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_engine_ini(tmp.path(), "[Core.Log]\nGlobal=none\n");
+        assert!(check_logging_enabled(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn check_logging_enabled_ok_when_global_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_engine_ini(tmp.path(), "[Core.Log]\nGlobal=Log\n");
+        assert!(check_logging_enabled(tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn check_logging_enabled_ok_when_no_core_log_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_engine_ini(tmp.path(), "[Other.Section]\nSomeKey=SomeValue\n");
+        assert!(check_logging_enabled(tmp.path()).is_ok());
+    }
+
+    #[test]
+    fn check_logging_enabled_ok_when_no_ini_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(check_logging_enabled(tmp.path()).is_ok());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,9 +8,15 @@ use toml_edit::DocumentMut;
 
 #[derive(Deserialize)]
 pub struct GameConfig {
-    pub name: String,
-    pub search_dirs: Vec<String>,
-    pub path_hints: Vec<String>,
+    name: String,
+    search_dirs: Vec<String>,
+    path_hints: Vec<String>,
+}
+
+impl GameConfig {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml");
@@ -48,24 +54,66 @@ impl Config {
         })
     }
 
-    pub fn search_dirs_for(&self, id: &str, home: &Path) -> Result<Vec<PathBuf>> {
+    pub fn search_dirs_for(
+        &self,
+        id: &str,
+        home: &Path,
+        extra: &[String],
+    ) -> Result<Vec<PathBuf>> {
         let gc = self.game_config(id)?;
 
-        let dirs = gc
+        let resolve = |d: &String| {
+            let p = PathBuf::from(d);
+            if p.is_absolute() {
+                p
+            } else {
+                home.join(p)
+            }
+        };
+
+        let dirs: Vec<PathBuf> = gc
             .search_dirs
             .iter()
-            .map(|d| {
-                let p = PathBuf::from(d);
-                if p.is_absolute() {
-                    p
-                } else {
-                    home.join(p)
-                }
-            })
+            .chain(extra.iter())
+            .map(resolve)
             .filter(|p| p.is_dir())
             .collect();
 
-        Ok(dirs)
+        Ok(dedup_dirs(dirs))
+    }
+
+    pub fn add_search_dir(&self, game_id: &str, path: &str) -> Result<()> {
+        let config_path = config_path();
+
+        let contents = fs::read_to_string(&config_path)
+            .with_context(|| format!("could not read config file at {}", config_path.display()))?;
+
+        let mut doc: DocumentMut = contents
+            .parse()
+            .with_context(|| format!("failed to parse config file at {}", config_path.display()))?;
+
+        let game_table = doc
+            .get_mut(game_id)
+            .and_then(|v| v.as_table_like_mut())
+            .ok_or_else(|| anyhow::anyhow!("no configuration found for game '{game_id}'"))?;
+
+        let search_dirs = game_table
+            .get_mut("search_dirs")
+            .and_then(|v| v.as_array_mut())
+            .ok_or_else(|| {
+                anyhow::anyhow!("'search_dirs' is missing or not an array for game '{game_id}'")
+            })?;
+
+        if search_dirs.iter().any(|v| v.as_str() == Some(path)) {
+            bail!("'{}' is already in search_dirs for '{}'", path, game_id);
+        }
+
+        search_dirs.push(path);
+
+        fs::write(&config_path, doc.to_string())
+            .with_context(|| format!("failed to write config file at {}", config_path.display()))?;
+
+        Ok(())
     }
 }
 
@@ -77,6 +125,16 @@ impl GameConfig {
             .iter()
             .any(|hint| lower.contains(&hint.to_ascii_lowercase()))
     }
+}
+
+fn dedup_dirs(dirs: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    dirs.into_iter()
+        .filter(|p| {
+            let canonical = p.canonicalize().unwrap_or_else(|_| p.clone());
+            seen.insert(canonical)
+        })
+        .collect()
 }
 
 pub fn config_path() -> PathBuf {
@@ -150,7 +208,7 @@ mod tests {
         std::fs::create_dir_all(&sub).unwrap();
 
         let config = make_config(vec!["games/mygame".to_owned()]);
-        let dirs = config.search_dirs_for("test", home).unwrap();
+        let dirs = config.search_dirs_for("test", home, &[]).unwrap();
 
         assert_eq!(dirs, vec![sub]);
     }
@@ -161,7 +219,9 @@ mod tests {
         let abs = tmp.path().to_owned();
 
         let config = make_config(vec![abs.to_string_lossy().to_string()]);
-        let dirs = config.search_dirs_for("test", Path::new("/irrelevant")).unwrap();
+        let dirs = config
+            .search_dirs_for("test", Path::new("/irrelevant"), &[])
+            .unwrap();
 
         assert_eq!(dirs, vec![abs]);
     }
@@ -173,43 +233,9 @@ mod tests {
             "also/does/not/exist".to_owned(),
         ]);
         let dirs = config
-            .search_dirs_for("test", Path::new("/home/user"))
+            .search_dirs_for("test", Path::new("/home/user"), &[])
             .unwrap();
 
         assert!(dirs.is_empty());
     }
-}
-
-pub fn add_search_dir(game_id: &str, path: &str) -> Result<()> {
-    let config_path = config_path();
-
-    let contents = fs::read_to_string(&config_path)
-        .with_context(|| format!("could not read config file at {}", config_path.display()))?;
-
-    let mut doc: DocumentMut = contents
-        .parse()
-        .with_context(|| format!("failed to parse config file at {}", config_path.display()))?;
-
-    let game_table = doc
-        .get_mut(game_id)
-        .and_then(|v| v.as_table_like_mut())
-        .ok_or_else(|| anyhow::anyhow!("no configuration found for game '{game_id}'"))?;
-
-    let search_dirs = game_table
-        .get_mut("search_dirs")
-        .and_then(|v| v.as_array_mut())
-        .ok_or_else(|| {
-            anyhow::anyhow!("'search_dirs' is missing or not an array for game '{game_id}'")
-        })?;
-
-    if search_dirs.iter().any(|v| v.as_str() == Some(path)) {
-        bail!("'{}' is already in search_dirs for '{}'", path, game_id);
-    }
-
-    search_dirs.push(path);
-
-    fs::write(&config_path, doc.to_string())
-        .with_context(|| format!("failed to write config file at {}", config_path.display()))?;
-
-    Ok(())
 }
