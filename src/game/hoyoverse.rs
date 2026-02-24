@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 /// Locate and extract a valid gacha URL from a HoYoverse game directory.
 ///
 /// These games store URLs in a binary cache file (`data_2`) inside a versioned
-/// `webCaches` directory. The URL is validated against the API and stripped
+/// `webCaches` directory. The URL is check_url_lived against the API and stripped
 /// down to only the retained query parameters.
 pub fn extract_from_cache(
     game_dir: &Path,
@@ -33,7 +33,7 @@ pub fn extract_from_cache(
             continue;
         };
 
-        if validate(&client, &parsed)? {
+        if check_url_live(&client, &parsed)? {
             return Ok(strip_params(&parsed, retained_params));
         }
     }
@@ -53,11 +53,12 @@ fn find_data_2(game_dir: &Path) -> Result<std::path::PathBuf> {
         )
     })?;
 
-    let mut best_version: u64 = 0;
-    let mut best_path = web_caches.join("Cache/Cache_Data/data_2");
-
     let entries = fs::read_dir(&web_caches)
         .with_context(|| format!("failed to read {}", web_caches.display()))?;
+
+    // Find the highest-versioned subdirectory (e.g. "2.24.0.5").
+    let mut best_version: u64 = 0;
+    let mut best_versioned_dir: Option<std::path::PathBuf> = None;
 
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name();
@@ -70,11 +71,14 @@ fn find_data_2(game_dir: &Path) -> Result<std::path::PathBuf> {
         let version: u64 = name.replace('.', "").parse().unwrap_or(0);
         if version >= best_version {
             best_version = version;
-            best_path = web_caches
-                .join(name.as_ref())
-                .join("Cache/Cache_Data/data_2");
+            best_versioned_dir = Some(web_caches.join(name.as_ref()));
         }
     }
+
+    // If no versioned subdirectory exists, fall back to the unversioned
+    // Cache path directly under webCaches.
+    let cache_root = best_versioned_dir.unwrap_or_else(|| web_caches.clone());
+    let best_path = cache_root.join("Cache/Cache_Data/data_2");
 
     if best_path.is_file() {
         Ok(best_path)
@@ -138,7 +142,7 @@ fn find_urls(data: &[u8], patterns: &[&str]) -> Vec<String> {
     urls
 }
 
-fn validate(client: &reqwest::blocking::Client, url: &Url) -> Result<bool> {
+fn check_url_live(client: &reqwest::blocking::Client, url: &Url) -> Result<bool> {
     let resp: serde_json::Value = client
         .get(url.as_str())
         .header("Content-Type", "application/json")

@@ -23,6 +23,7 @@ pub fn auto_detect(
         }
 
         let walker = WalkDir::new(dir)
+            .max_depth(6)
             .follow_links(true)
             .into_iter()
             .filter_entry(|e| e.file_name().to_string_lossy() != "dosdevices");
@@ -53,7 +54,7 @@ pub fn auto_detect(
             "could not find any directories matching {} hints.\n\
              Searched in:\n{}\n\
              To add a search path, run: gacha-url -g {} -a <path>",
-            game_config.name,
+            game_config.name(),
             searched.join("\n"),
             game.id()
         );
@@ -73,7 +74,7 @@ pub fn auto_detect(
             "checked {} candidate directories for {} but extraction failed in all of them.\n\
              To add a search path, run: gacha-url -g {} -a <path>",
             candidates.len(),
-            game_config.name,
+            game_config.name(),
             game.id()
         )
     }))
