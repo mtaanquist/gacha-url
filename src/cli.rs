@@ -21,20 +21,26 @@ pub struct Cli {
 
 #[derive(ValueEnum, Clone, Copy)]
 pub enum GameArg {
+    /// Arknights: Endfield
+    Endfield,
     /// Honkai: Star Rail
     Hsr,
     /// Genshin Impact
-    Gi,
+    Genshin,
     /// Wuthering Waves
     Wuwa,
+    /// Zenless Zone Zero
+    Zzz,
 }
 
 impl GameArg {
     pub fn into_game(self) -> Box<dyn GachaGame> {
         match self {
+            Self::Endfield => Box::new(game::Endfield),
             Self::Hsr => Box::new(game::HonkaiStarRail),
-            Self::Gi => Box::new(game::GenshinImpact),
+            Self::Genshin => Box::new(game::GenshinImpact),
             Self::Wuwa => Box::new(game::WutheringWaves),
+            Self::Zzz => Box::new(game::ZenlessZoneZero),
         }
     }
 }
