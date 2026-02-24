@@ -6,9 +6,11 @@ A command-line tool that extracts gacha/convene history URLs from game caches. T
 
 | Game | Flag |
 |---|---|
+| Arknights: Endfield | `endfield` |
+| Genshin Impact | `genshin` |
 | Honkai: Star Rail | `hsr` |
-| Genshin Impact | `gi` |
 | Wuthering Waves | `wuwa` |
+| Zenless Zone Zero | `zzz` |
 
 ## Installation
 
@@ -68,10 +70,16 @@ If you need a fresh config file, delete the existing one and run the tool again.
 
 ## How it works
 
-### HoYoverse games (Honkai: Star Rail, Genshin Impact)
+### HoYoverse games (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero)
 
 These games store API URLs in a binary cache file (`webCaches/*/Cache/Cache_Data/data_2`). The tool finds the highest-versioned cache directory, scans for URLs matching known API patterns, and validates each against the live API until one returns a successful response. The URL is then stripped down to only the essential query parameters.
+
+### Arknights: Endfield
+
+Endfield logs the gacha history URL in its SDK webview log file (`HGWebview.log`). The tool scans the log and returns the most recent URL found.
 
 ### Wuthering Waves
 
 Wuthering Waves logs the convene history URL in its client log files. The tool searches known log paths and returns the most recent URL found.
+
+Note: logging must be enabled in the game. If `Client/Saved/Config/WindowsNoEditor/Engine.ini` contains `Global=off` or `Global=none` under `[Core.Log]`, the tool will not be able to find the URL. Remove or change that line to re-enable logging.
