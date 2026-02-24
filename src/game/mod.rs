@@ -1,11 +1,15 @@
+mod endfield;
 mod genshin;
 mod hoyoverse;
 mod hsr;
 mod wuwa;
+mod zzz;
 
+pub use endfield::Endfield;
 pub use genshin::GenshinImpact;
 pub use hsr::HonkaiStarRail;
 pub use wuwa::WutheringWaves;
+pub use zzz::ZenlessZoneZero;
 
 use std::path::Path;
 

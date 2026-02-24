@@ -1,3 +1,8 @@
+[endfield]
+name = "Arknights: Endfield"
+search_dirs = []
+path_hints = ["Endfield", "Gryphline"]
+
 [hsr]
 name = "Honkai: Star Rail"
 search_dirs = [
@@ -9,7 +14,7 @@ search_dirs = [
 ]
 path_hints = ["Star Rail", "StarRail", "HSR", "honkers-railway"]
 
-[gi]
+[genshin]
 name = "Genshin Impact"
 search_dirs = [
     # Linux - native launchers
@@ -28,3 +33,12 @@ search_dirs = [
     ".steam/steam/steamapps/common/Wuthering Waves",
 ]
 path_hints = ["Wuthering Waves", "WutheringWaves", "wuwa"]
+
+[zzz]
+name = "Zenless Zone Zero"
+search_dirs = [
+    # Linux - Steam / Proton
+    ".local/share/Steam/steamapps/compatdata",
+    ".steam/steam/steamapps/compatdata",
+]
+path_hints = ["Zenless Zone Zero", "ZenlessZoneZero", "ZZZ"]

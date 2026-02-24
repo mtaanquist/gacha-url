@@ -5,14 +5,14 @@ use anyhow::Result;
 use super::hoyoverse;
 use super::GachaGame;
 
-pub struct GenshinImpact;
+pub struct ZenlessZoneZero;
 
-const URL_PATTERNS: &[&str] = &["getGachaLog", "webview_gacha"];
+const URL_PATTERNS: &[&str] = &["getGachaLog"];
 const RETAINED_PARAMS: &[&str] = &["authkey", "authkey_ver", "sign_type", "game_biz", "lang"];
 
-impl GachaGame for GenshinImpact {
+impl GachaGame for ZenlessZoneZero {
     fn id(&self) -> &'static str {
-        "genshin"
+        "zzz"
     }
 
     fn extract_url(&self, game_dir: &Path) -> Result<String> {
